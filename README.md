@@ -170,19 +170,26 @@
 <a id="installation"></a>
 ## 🚀 极速安装与部署 (Installation)
 
-### 选项 A：标准 Python 安装（推荐 / 全局可用 CLI）
+### 选项 A：从本仓库安装修正版（推荐 / 全局可用 CLI）
 
-现已支持作为标准 Python 包分发与运行：
+> [!IMPORTANT]
+> `pip install hermes-patches` 安装的是 PyPI 上原作者发布的版本，不包含本仓库针对最新版 Hermes Agent 的兼容修复。请使用下面的 GitHub 安装命令。
 
 ```bash
-# 1. 直接通过 pip 安装
-pip install hermes-patches
+# 1. 从本仓库安装或升级修正版
+python -m pip install --upgrade git+https://github.com/cokear/hermes-patches.git
 
-# 2. 终端任意位置直接调出中文交互式控制台
+# 2. 终端任意位置调出中文交互式控制台
 hermes-patches
 
-# 3. 或一键全自动静默打全量补丁、自动配置并平滑重启
+# 3. 或一键应用全部补丁、自动配置并尝试平滑重启
 hermes-patches --all --auto-config --restart
+```
+
+如需固定当前已验证的修复提交，可使用：
+
+```bash
+python -m pip install --upgrade git+https://github.com/cokear/hermes-patches.git@a86bb73777fac67fc9863813c62e374a2ac7cc79
 ```
 
 > 💡 **免安装直接运行 (pipx)**：  
