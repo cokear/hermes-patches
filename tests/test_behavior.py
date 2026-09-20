@@ -184,9 +184,17 @@ def main():
     cli_mixin = target_dir / "hermes_cli/cli_stream_mixin.py"
     stream_think = target_dir / "gateway/stream_consumer_think.py"
 
-    cli_code = cli_mixin.read_text(encoding="utf-8") if cli_mixin.is_file() else cli_file.read_text(encoding="utf-8")
-    stream_code = stream_think.read_text(encoding="utf-8") if stream_think.is_file() else stream_file.read_text(encoding="utf-8")
-    assert "<antml:thought>" in cli_code and "<antml:thought>" in stream_code, "Thought tags missing in clean-thinking"
+    think_scrubber = target_dir / "agent/think_scrubber.py"
+    if think_scrubber.is_file():
+        scrubber_code = think_scrubber.read_text(encoding="utf-8")
+        for tag in ("antml:thought", "reflection", "inner_monologue"):
+            assert f'"{tag}"' in scrubber_code, f"{tag} missing in centralized think scrubber"
+        assert "THINK_OPEN_TAGS" in cli_mixin.read_text(encoding="utf-8"), "CLI does not use centralized think tags"
+        assert "THINK_OPEN_TAGS" in stream_think.read_text(encoding="utf-8"), "Gateway does not use centralized think tags"
+    else:
+        cli_code = cli_mixin.read_text(encoding="utf-8") if cli_mixin.is_file() else cli_file.read_text(encoding="utf-8")
+        stream_code = stream_think.read_text(encoding="utf-8") if stream_think.is_file() else stream_file.read_text(encoding="utf-8")
+        assert "<antml:thought>" in cli_code and "<antml:thought>" in stream_code, "Thought tags missing in clean-thinking"
 
     # -------------------------------------------------------------
     # 8. Telegram 4096 Smart Split

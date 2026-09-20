@@ -297,6 +297,21 @@ def format_runtime_footer('''
                     sig_pat = r'(\s*fields:\s*Iterable\[str\]\s*=\s*_DEFAULT_FIELDS\s*,?\s*\)\s*->\s*str:)'
                     cand = re.sub(sig_pat, "\n" + new_sig, cand, count=1)
 
+            # Newer layouts keep build_footer_line separate from format_runtime_footer.
+            # Ensure the entrypoint declares every token value it forwards.
+            if "def build_footer_line(" in cand and "prompt_tokens: int = 0" not in cand:
+                build_sig = re.compile(
+                    r'(def build_footer_line\(\*,.*?requested_model: Optional\[str\] = None,\s*'
+                    r'served_model: Optional\[str\] = None)(\) -> str:)',
+                    re.DOTALL,
+                )
+                cand = build_sig.sub(
+                    r'\1,\n                      prompt_tokens: int = 0, output_tokens: int = 0,\n'
+                    r'                      cache_read_tokens: int = 0\2',
+                    cand,
+                    count=1,
+                )
+
             # 4. format fields mapping (supports both legacy loop and new renderers dict)
             if "🧠 Prompt总量" not in cand:
                 if "renderers = {" in cand:
@@ -618,6 +633,18 @@ def format_runtime_footer('''
             )'''
                 if old_turn_bfl in cand:
                     cand = cand.replace(old_turn_bfl, new_turn_bfl, 1)
+                else:
+                    # Current modular layout includes requested/served model fields.
+                    served_line = '                served_model=agent_result.get("served_model"),\n'
+                    if served_line in cand:
+                        cand = cand.replace(
+                            served_line,
+                            served_line
+                            + '                prompt_tokens=agent_result.get("input_tokens", 0) or 0,\n'
+                            + '                output_tokens=agent_result.get("output_tokens", 0) or 0,\n'
+                            + '                cache_read_tokens=agent_result.get("cache_read_tokens", 0) or 0,\n',
+                            1,
+                        )
                 return cand
             self.apply_file_patch("gateway/run_turn.py", transform_turn_footer, "⚙️ Turn 页脚计量参数直传")
 
@@ -1114,7 +1141,32 @@ def format_runtime_footer('''
         ok1 = self.apply_file_patch("cli.py", transform_cli, "🧠 CLI 终端思考过程静音")
         ok2 = self.apply_file_patch("gateway/stream_consumer.py", transform_stream_consumer, "🧠 Gateway 思考标签深度净化")
 
-        # Upstream modular split for stream & think tags
+        # Newer Hermes versions centralize reasoning tags in agent/think_scrubber.py.
+        # Patch the single source of truth so CLI, gateway streaming, and final-response
+        # cleanup all receive the same expanded tag set.
+        think_scrubber = self.target_dir / "agent/think_scrubber.py"
+        if think_scrubber.is_file():
+            def transform_think_scrubber(src: str) -> str:
+                required_tags = ("antml:thought", "reflection", "inner_monologue")
+                if all(f'"{tag}"' in src for tag in required_tags):
+                    return src
+                pattern = r'(THINK_TAG_NAMES:\s*Tuple\[str, \.\.\.\]\s*=\s*\()([^\n]*)(\))'
+                match = re.search(pattern, src)
+                if not match:
+                    return src
+                existing = match.group(2).rstrip()
+                additions = "".join(
+                    f', "{tag}"' for tag in required_tags if f'"{tag}"' not in existing
+                )
+                return src[:match.start(2)] + existing + additions + src[match.end(2):]
+
+            self.apply_file_patch(
+                "agent/think_scrubber.py",
+                transform_think_scrubber,
+                "🧠 统一思考标签源深度净化",
+            )
+
+        # Compatibility with older Hermes layouts where each consumer owns tags.
         if (self.target_dir / "hermes_cli/cli_stream_mixin.py").is_file():
             self.apply_file_patch("hermes_cli/cli_stream_mixin.py", transform_cli, "🧠 CLI Stream Mixin 思考标签净化")
 
